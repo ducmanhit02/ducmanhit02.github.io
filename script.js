@@ -13,6 +13,11 @@ const toast = document.querySelector("[data-toast]");
     const heroLunarNode = document.querySelector("[data-hero-lunar]");
     const heroCanChiNode = document.querySelector("[data-hero-canchi]");
     const dailyFocusNode = document.querySelector("[data-daily-focus]");
+    const syncStateNode = document.querySelector("[data-sync-state]");
+    const timeSourceNode = document.querySelector("[data-time-source]");
+    const floatingMenu = document.querySelector("[data-floating-menu]");
+    const floatingToggle = document.querySelector("[data-floating-toggle]");
+    const ideaNoteNode = document.querySelector("[data-idea-note]");
 
     const modalData = {
       profile: {
@@ -35,7 +40,7 @@ const toast = document.querySelector("[data-toast]");
           "Dựng key visual theo chiến dịch, giữ tính đồng bộ giữa online và offline.",
           "Chỉnh sửa ảnh, dựng thumbnail, xử lý visual cho landing page và quảng cáo."
         ],
-        chips: ["Photoshop", "Illustrator", "Social Design", "KV", "Print"]
+        chips: ["Photoshop", "Illustrator", "Social Design", "KV", "Ấn phẩm"]
       },
       social: {
         tag: "Content engine",
@@ -131,12 +136,6 @@ const toast = document.querySelector("[data-toast]");
       }
     };
 
-    const themes = [
-      { name: "Cam năng lượng", orange: "#f05a28", amber: "#f2b705", green: "#188a68" },
-      { name: "Xanh tăng trưởng", orange: "#0e8f7b", amber: "#ffd166", green: "#315efb" },
-      { name: "Đỏ editorial", orange: "#d93636", amber: "#f4c542", green: "#1f7a5b" }
-    ];
-
     const dailyFocus = [
       "Dọn insight, lên lịch nội dung",
       "Chốt thông điệp chính",
@@ -144,8 +143,48 @@ const toast = document.querySelector("[data-toast]");
       "Đo số liệu, tối ưu nội dung",
       "Kiểm tra landing page",
       "Tăng tốc creative quảng cáo",
-      "Tổng kết và chuẩn bị tuần mới"
+      "Tổng kết và chuẩn bị tuần mới",
+      "Viết lại headline cho gọn hơn",
+      "Test một layout social mới",
+      "Chọn 3 chỉ số cần theo dõi"
     ];
+
+    const ideaPrompts = [
+      "Làm một mini-series 5 bài: vấn đề, giải pháp, bằng chứng, hậu trường, lời mời hành động.",
+      "Tạo 3 biến thể banner cùng thông điệp nhưng khác điểm nhấn: giá trị, cảm xúc, kết quả.",
+      "Biến phần FAQ thành nội dung ngắn cho social để kéo traffic về landing page.",
+      "Dùng một case nhỏ trước-sau để chứng minh tư duy thiết kế và tối ưu chuyển đổi.",
+      "Làm checklist 7 điểm cho landing page bán hàng rồi dùng nó làm bài chia sẻ chuyên môn.",
+      "Tạo một bộ thumbnail thống nhất style để fanpage nhìn chuyên nghiệp hơn trong 7 ngày."
+    ];
+
+    const timeSources = [
+      {
+        name: "TimeAPI.io",
+        url: "https://timeapi.io/api/Time/current/zone?timeZone=Asia/Ho_Chi_Minh",
+        parse(data) {
+          if (!data || typeof data.year !== "number") return null;
+          const ms = typeof data.milliSeconds === "number" ? data.milliSeconds : 0;
+          return Date.UTC(data.year, data.month - 1, data.day, data.hour - 7, data.minute, data.seconds, ms);
+        }
+      },
+      {
+        name: "WorldTimeAPI",
+        url: "https://worldtimeapi.org/api/timezone/Asia/Ho_Chi_Minh",
+        parse(data) {
+          if (data && typeof data.unixtime === "number") return data.unixtime * 1000;
+          if (data && data.datetime) {
+            const parsed = Date.parse(data.datetime);
+            return Number.isNaN(parsed) ? null : parsed;
+          }
+          return null;
+        }
+      }
+    ];
+
+    let syncedClock = null;
+    let syncingTime = false;
+    let manualFocus = null;
 
     function showToast(message) {
       if (!toast) return;
@@ -155,27 +194,83 @@ const toast = document.querySelector("[data-toast]");
       showToast.timer = setTimeout(() => toast.classList.remove("is-visible"), 2200);
     }
 
-    function applyTheme(index) {
-      const theme = themes[index % themes.length];
-      document.documentElement.style.setProperty("--orange", theme.orange);
-      document.documentElement.style.setProperty("--amber", theme.amber);
-      document.documentElement.style.setProperty("--green", theme.green);
-      try {
-        localStorage.setItem("portfolio-theme", String(index % themes.length));
-      } catch (error) {
-        // Local storage can be unavailable in strict file contexts.
+    function setSyncState(text, mode = "pending") {
+      if (syncStateNode) {
+        syncStateNode.textContent = text;
+        syncStateNode.dataset.mode = mode;
       }
-      return theme.name;
     }
 
-    function setupTheme() {
-      let saved = 0;
-      try {
-        saved = Number(localStorage.getItem("portfolio-theme") || 0);
-      } catch (error) {
-        saved = 0;
+    function setIdeaPrompt() {
+      if (!ideaNoteNode) return;
+      const current = ideaNoteNode.textContent.trim();
+      const next = ideaPrompts.find((item) => item !== current) || ideaPrompts[0];
+      const randomIndex = Math.floor(Math.random() * ideaPrompts.length);
+      const randomPrompt = ideaPrompts[randomIndex] === current ? next : ideaPrompts[randomIndex];
+      ideaNoteNode.textContent = randomPrompt;
+      showToast("Đã tạo một gợi ý ý tưởng mới");
+    }
+
+    function shuffleDailyFocus() {
+      const current = dailyFocusNode ? dailyFocusNode.textContent.trim() : "";
+      const pool = dailyFocus.filter((item) => item !== current);
+      manualFocus = pool[Math.floor(Math.random() * pool.length)] || dailyFocus[0];
+      if (dailyFocusNode) dailyFocusNode.textContent = manualFocus;
+      showToast("Đã đổi gợi ý hôm nay");
+    }
+
+    function setTimeSource(text) {
+      if (timeSourceNode) timeSourceNode.textContent = text;
+    }
+
+    function getSyncedNow() {
+      if (!syncedClock) return null;
+      return new Date(syncedClock.epochMs + performance.now() - syncedClock.syncedAt);
+    }
+
+    async function syncWebTime() {
+      if (syncingTime) return;
+      syncingTime = true;
+      if (!syncedClock) {
+        setSyncState("Đang đồng bộ", "pending");
+        setTimeSource("Đang lấy thời gian từ web...");
       }
-      applyTheme(Number.isFinite(saved) ? saved : 0);
+
+      for (const source of timeSources) {
+        try {
+          const response = await fetch(source.url, { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          const epochMs = source.parse(data);
+          if (!Number.isFinite(epochMs)) throw new Error("Invalid time payload");
+          syncedClock = {
+            epochMs,
+            source: source.name,
+            syncedAt: performance.now()
+          };
+          setSyncState("Đồng bộ web", "ok");
+          updateClock();
+          const syncedAt = getSyncedNow();
+          const syncText = syncedAt
+            ? new Intl.DateTimeFormat("vi-VN", {
+                timeZone: "Asia/Ho_Chi_Minh",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false
+              }).format(syncedAt)
+            : "--:--:--";
+          setTimeSource(`Nguồn: ${source.name} • cập nhật ${syncText}`);
+          syncingTime = false;
+          return;
+        } catch (error) {
+          // Try the next public time source before reporting a sync issue.
+        }
+      }
+
+      syncingTime = false;
+      setSyncState("Mất kết nối web", "error");
+      setTimeSource("Chưa đồng bộ được thời gian web. Kiểm tra kết nối mạng rồi tải lại trang.");
     }
 
     function INT(value) {
@@ -315,7 +410,12 @@ const toast = document.querySelector("[data-toast]");
     }
 
     function updateClock() {
-      const now = new Date();
+      const now = getSyncedNow();
+      if (!now) {
+        if (clockNode) clockNode.textContent = "--:--:--";
+        if (heroClockNode) heroClockNode.textContent = "--:--:--";
+        return;
+      }
       const solar = getVietnamDateParts(now);
       const lunar = convertSolarToLunar(solar.day, solar.month, solar.year, 7);
       const timeText = new Intl.DateTimeFormat("vi-VN", {
@@ -341,6 +441,10 @@ const toast = document.querySelector("[data-toast]");
       if (dateNode) {
         dateNode.textContent = dateText;
       }
+      const year = document.querySelector("#year");
+      if (year) {
+        year.textContent = String(solar.year);
+      }
       if (lunarNode) {
         lunarNode.textContent = `${lunarText} - ${canChiText}`;
       }
@@ -357,7 +461,12 @@ const toast = document.querySelector("[data-toast]");
         heroCanChiNode.textContent = canChiText;
       }
       if (dailyFocusNode) {
-        dailyFocusNode.textContent = dailyFocus[now.getDay()];
+        const weekday = new Intl.DateTimeFormat("en-US", {
+          timeZone: "Asia/Ho_Chi_Minh",
+          weekday: "short"
+        }).format(now);
+        const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+        dailyFocusNode.textContent = manualFocus || dailyFocus[weekdayMap[weekday] ?? 0];
       }
     }
 
@@ -429,6 +538,23 @@ const toast = document.querySelector("[data-toast]");
     }
 
     document.addEventListener("click", (event) => {
+      const floatToggle = event.target.closest("[data-floating-toggle]");
+      if (floatToggle && floatingMenu) {
+        event.preventDefault();
+        const isOpen = floatingMenu.classList.toggle("is-open");
+        floatToggle.setAttribute("aria-expanded", String(isOpen));
+        return;
+      }
+
+      const floatingLink = event.target.closest(".float-menu-panel a");
+      if (floatingLink && floatingMenu && floatingToggle) {
+        floatingMenu.classList.remove("is-open");
+        floatingToggle.setAttribute("aria-expanded", "false");
+      } else if (floatingMenu && floatingToggle && !event.target.closest("[data-floating-menu]")) {
+        floatingMenu.classList.remove("is-open");
+        floatingToggle.setAttribute("aria-expanded", "false");
+      }
+
       const modalTrigger = event.target.closest("[data-modal]");
       if (modalTrigger) {
         event.preventDefault();
@@ -449,26 +575,26 @@ const toast = document.querySelector("[data-toast]");
         return;
       }
 
-      if (event.target.closest("[data-theme-cycle]")) {
-        let current = 0;
-        try {
-          current = Number(localStorage.getItem("portfolio-theme") || 0);
-        } catch (error) {
-          current = 0;
-        }
-        const name = applyTheme(current + 1);
-        showToast(`Đã đổi màu nhấn: ${name}`);
+      if (event.target.closest("[data-idea]")) {
+        event.preventDefault();
+        setIdeaPrompt();
         return;
       }
 
-      if (event.target.closest("[data-print]")) {
-        showToast("Đang mở hộp thoại in portfolio");
-        setTimeout(() => window.print(), 120);
+      if (event.target.closest("[data-focus-shuffle]")) {
+        event.preventDefault();
+        shuffleDailyFocus();
       }
     });
 
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") closeModal();
+      if (event.key === "Escape") {
+        closeModal();
+        if (floatingMenu && floatingToggle) {
+          floatingMenu.classList.remove("is-open");
+          floatingToggle.setAttribute("aria-expanded", "false");
+        }
+      }
       const trigger = event.target.closest('[data-modal][role="button"]');
       if (trigger && (event.key === "Enter" || event.key === " ")) {
         event.preventDefault();
@@ -501,7 +627,7 @@ const toast = document.querySelector("[data-toast]");
     document.querySelectorAll(".reveal").forEach((node) => revealObserver.observe(node));
 
     const sections = [...document.querySelectorAll("main section[id]")];
-    const navLinks = [...document.querySelectorAll(".nav-links a")];
+    const navLinks = [...document.querySelectorAll(".nav-links a, .float-menu-panel a")];
 
     const navObserver = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
@@ -514,8 +640,7 @@ const toast = document.querySelector("[data-toast]");
 
     sections.forEach((section) => navObserver.observe(section));
 
-    const year = document.querySelector("#year");
-    if (year) year.textContent = String(new Date().getFullYear());
-    setupTheme();
     updateClock();
+    syncWebTime();
     setInterval(updateClock, 1000);
+    setInterval(syncWebTime, 5 * 60 * 1000);
